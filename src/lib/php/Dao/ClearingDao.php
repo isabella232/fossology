@@ -231,7 +231,6 @@ class ClearingDao extends Object
     $result = $this->dbManager->execute($statementName, $params);
     $clearingsWithLicensesArray = array();
 
-    $previousClearingId = -1;
     $previousItemId = -1;
     $clearingEvents = array();
     $clearingEventCache = array();
@@ -253,7 +252,7 @@ class ClearingDao extends Object
       $comment = $row['comment'];
       $reportInfo = $row['reportinfo'];
 
-      if ($clearingId !== $previousClearingId && $itemId !== $previousItemId)
+      if ($itemId !== $previousItemId)
       {
         //store the old one
         if (!$firstMatch)
@@ -263,7 +262,6 @@ class ClearingDao extends Object
 
         $firstMatch = false;
         //prepare the new one
-        $previousClearingId = $clearingId;
         if(!$forClearingHistory){
           $previousItemId = $itemId;
         }
