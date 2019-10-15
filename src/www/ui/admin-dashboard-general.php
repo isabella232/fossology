@@ -32,7 +32,7 @@ class dashboard extends FO_Plugin
   {
     $this->Name       = "dashboard";
     $this->Title      = TITLE_DASHBOARD;
-    $this->MenuList   = "Admin::Dashboard";
+    $this->MenuList   = "Admin::Dashboards::Overview";
     $this->DBaccess   = PLUGIN_DB_ADMIN;
     parent::__construct();
     $this->dbManager = $GLOBALS['container']->get('db.manager');

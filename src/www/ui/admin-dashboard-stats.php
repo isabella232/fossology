@@ -1,7 +1,7 @@
 <?php
 /** */
 
-define("TITLE_DASHBOARD", _("Reporting dashboard"));
+define("TITLE_DASHBOARD", _("Statistics dashboard"));
 
 use Fossology\Lib\Db\DbManager;
 
@@ -14,9 +14,9 @@ class dashboardReporting extends FO_Plugin
 
   function __construct()
   {
-    $this->Name       = "dashboard-reporting";
+    $this->Name       = "dashboard-statistics";
     $this->Title      = TITLE_DASHBOARD;
-    $this->MenuList   = "Admin::Dashboards::Reporting";
+    $this->MenuList   = "Admin::Dashboards::Statistics";
     $this->DBaccess   = PLUGIN_DB_ADMIN;
     parent::__construct();
     $this->dbManager = $GLOBALS['container']->get('db.manager');
