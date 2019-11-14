@@ -1,6 +1,6 @@
 <?php
 /***********************************************************
- Copyright (C) 2019 Orange
+ Copyright (C) 2019 Orange 
 
  This program is free software; you can redistribute it and/or
  modify it under the terms of the GNU General Public License
@@ -37,6 +37,42 @@ class dashboardReporting extends FO_Plugin
     $this->dbManager = $GLOBALS['container']->get('db.manager');
   }
 
+  // function GetUploadPerType(){
+  //   // TODO: I do not get how the upload mode is set. There should be two kinds of result of bitwise operation, but somehow there is more..
+  //   // it seems like 100 and 104 are finihed. other lower ids are not fully uploaded?
+  //   $query = "select upload_mode,t.mode , count (upload_origin) from upload u,(VALUES('git',100),('file',104)) as t (mode,mode_id) where t.mode_id=u.upload_mode group by u.upload_mode,t.mode;";
+
+
+
+  // }
+
+  function GetOtherMeasures(){
+
+    //TODO: consult this query - shloundn't it be exploded to separate queries ??
+    $q1 = "SELECT count(u.*) AS users FROM users u";
+    $q2 = "SELECT count(g.*) AS groups FROM groups g";
+    $q3 = "SELECT count(up.*) as uploads from (select distinct upload_mode,upload_origin from upload) up";
+    //it should maybe have a separate function as `GetUploadPerType` (currently commented out above..)
+    $q4 = "SELECT count(up1.upload_origin) as file_uploads FROM upload up1 WHERE up1.upload_mode=104";
+    $q5 = "SELECT count(up2.upload_origin) as url_uploads FROM upload up2 WHERE up2.upload_mode=100";
+    $query = "SELECT * FROM (".$q1.") as q1, (".$q2.") as q2, (".$q3.") as q3, (".$q4.") as q4, (".$q5.") as q5;";
+    
+    
+    $result = $this->dbManager->getSingleRow($query);
+    
+    $V = "<table border=1 width=350>";
+    $V.= "<tr><th>Measure</th><th>Value</th></tr>";
+    
+    $V.= "<tr><td align=left>Count Users</td><td align=right>".$result['users']."</td></tr>";
+    $V.= "<tr><td align=left>Count Groups</td><td align=right>".$result['groups']."</td></tr>";
+    $V.= "<tr><td align=left>Distinct uploads (mode+origin)</td><td align=right>".$result['uploads']."</td></tr>";
+    $V.= "<tr><td align=left>All File uploads</td><td align=right>".$result['file_uploads']."</td></tr>";
+    $V.= "<tr><td align=left>All URL uploads</td><td align=right>".$result['url_uploads']."</td></tr>";
+    $V.= "</table>";
+
+    return $V;
+  }
+
   /**
    * \brief Lists number of ever quequed jobs per job type (agent)..
    */
@@ -52,7 +88,7 @@ class dashboardReporting extends FO_Plugin
     $V .= "<tr><th>".("AgentName")."</th><th>"._("Description")."</th><th>"._("Number of jobs")."</th></tr>";
 
     foreach ($rows as $agData) {
-      $V .= "<tr><td>".$agData['agent_name']."</td><td>".$agData['agent_desc']."</td><td align='right'>".$agData['fired_jobs']."</td></tr>";
+      $V .= "<tr><td>".$agData['agent_name']."</td><td>".$agData['agent_desc']."</td><td aligalign='right'>".$agData['fired_jobs']."</td></tr>";
     }
 
     $V .= "</table>";
@@ -70,6 +106,11 @@ class dashboardReporting extends FO_Plugin
       $text = _("Jobs Sumary");
       $V .= "<h2>$text</h2>\n";
       $V .= $this->CountAllJobs();
+      $V .= "</td>";
+      $V .= "<td class='dashboard'>";
+      $text = _("Other Measures");
+      $V .= "<h2>$text</h2>\n";
+      $V .= $this->GetOtherMeasures();
       $V .= "</td>";
       $V .= "</tr>";
 
