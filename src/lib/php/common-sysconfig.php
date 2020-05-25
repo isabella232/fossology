@@ -388,6 +388,12 @@ function Populate_sysconfig()
   $valueArray[$variable] = array("'$variable'", "30", "'$patTokenValidityPrompt'",
     strval(CONFIG_TYPE_INT), "'PAT'", "1", "'$patTokenValidityDesc'", "null", "null");
 
+  $variable = "FossDashReportingAPIUrl";
+  $fossdashApiUrlPrompt = _('FossDash Endpoint URL');
+  $fossdashApiUrlDesc = _('Set the FossDash service endpoint. Disabled if empty.');
+  $valueArray[$variable] = array("'$variable'", "null", "'$fossdashApiUrlPrompt'",
+    strval(CONFIG_TYPE_TEXT), "'FossDashAPI'", "1", "'$fossdashApiUrlDesc'", "null", "null");
+
   $variable = "SkipFiles";
   $mimeTypeToSkip = _("Skip MimeTypes from scanning");
   $mimeTypeDesc = _("add  comma (,) separated mimetype to exclude files from scanning");

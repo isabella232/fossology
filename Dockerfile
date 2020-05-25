@@ -10,7 +10,6 @@
 # Description: Docker container image recipe
 
 FROM debian:stretch-slim as builder
-
 LABEL maintainer="Fossology <fossology@fossology.org>"
 
 WORKDIR /fossology
@@ -59,12 +58,18 @@ COPY --from=builder /fossology/dependencies-for-runtime /fossology
 WORKDIR /fossology
 
 # Fix for Postgres and other packages in slim variant
+# Note: cron, python, python-psycopg2 are installed
+#       specifically for metrics reporting
 RUN mkdir /usr/share/man/man1 /usr/share/man/man7 \
  && DEBIAN_FRONTEND=noninteractive apt-get update \
+ && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y \
  && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
       curl \
       lsb-release \
       sudo \
+      cron \
+      python \
+      python-psycopg2 \
  && DEBIAN_FRONTEND=noninteractive /fossology/utils/fo-installdeps --offline --runtime -y \
  && DEBIAN_FRONTEND=noninteractive apt-get purge -y lsb-release \
  && DEBIAN_FRONTEND=noninteractive apt-get autoremove -y \
@@ -86,6 +91,11 @@ ENTRYPOINT ["/fossology/docker-entrypoint.sh"]
 COPY --from=builder /etc/cron.d/fossology /etc/cron.d/fossology
 COPY --from=builder /etc/init.d/fossology /etc/init.d/fossology
 COPY --from=builder /usr/local/ /usr/local/
+
+# Copy FossDash scripts
+COPY ./install/fossdash/fossdash-publish.py /fossology/fossdash-publish.py
+COPY ./install/fossdash/fossdash-publish.run /fossology/fossdash-publish.run
+RUN chmod +x /fossology/fossdash-publish.run
 
 # the database is filled in the entrypoint
 RUN /usr/local/lib/fossology/fo-postinstall --agent --common --scheduler-only --web-only --no-running-database
