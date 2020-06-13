@@ -41,29 +41,17 @@ with open(DB_CONFIG_FILE, mode="r") as dbf:
 # produces "conf1=val1 conf2=val2 conf3=val3 ..."
 config = " ".join(["=".join(config) for config in CONFIG.items()])
 
+timestamp = datetime.datetime.now().strftime("%s000000000")
 
-def _query(connection, query, single=False):
-    cur = connection.cursor()
-    cur.execute(query)
-    result = cur.fetchone() if single else cur.fetchall()
-    return result
-
-
-def report(connection):
-    _result = {}
-    for query in [
-            "number_of_users", "number_of_groups", "number_of_file_uploads",
-            "number_of_projects__theoretically", "number_of_url_uploads",
-            "agents_count", "number_of_upload_status", "number_of_projects_per_size",
-            "reportgen_count", "pfile_count", "avg_pfile_count", "job_count"
-            ]:
-
-        result = _query(connection, QUERIES[query])
-        if result:
-            _result[query] = result if len(result) > 1 else result[0]
-    return _result
+QUERIES_NAME = [
+    "number_of_users", "number_of_groups", "number_of_file_uploads",
+    "number_of_projects__theoretically", "number_of_url_uploads",
+    "agents_count", "number_of_upload_status", "number_of_projects_per_size",
+    "reportgen_count", "pfile_count", "avg_pfile_count", "job_count"
+]
 
 QUERIES = {
+
     'uuid': "SELECT instance_uuid uuid FROM instance;",
     'number_of_users': "SELECT count(u.*) AS users FROM users u;",
     'number_of_groups': "SELECT count(g.*) AS groups FROM groups g;",
@@ -77,42 +65,88 @@ QUERIES = {
     "pfile_count": "select count(*) from pfile;",
     "avg_pfile_count": "select round(avg(pfile_size)) from pfile;",
     "job_count": "select count(*) as jobs from job;"
+    
+}
+
+def _query(connection, query, single=False):
+    cur = connection.cursor()
+    cur.execute(query)
+    result = cur.fetchone() if single else cur.fetchall()
+    return result
 
 
-    }
+def report(connection):
+    _result = {}
+    for query in QUERIES_NAME:
+        result = _query(connection, QUERIES[query])
+        if result:
+            _result[query] = result if len(result) > 1 else result[0]
+            # print "==> ", _result[query]
+    return _result
 
-def prepare_report(data, prefix=None):
+def getBuildVersionData() :
+    # final build version report metric
+    build_version_metrics = []
+
+    with open("/usr/local/etc/fossology/VERSION","r") as verf:
+        for i, line in enumerate(verf):
+            if i == 0 : # to skip the first line of heading 
+                continue
+            version_entry_array = line.split("=")
+            variableName = version_entry_array[0].lower()
+            variableValue = version_entry_array[1].strip()
+            if i == 3 : # to convert commit hash to string
+                variableValue = "\"" + variableValue + "\""
+            elif i == 4 or i == 5 : # to adjust DATEs value in string formate
+                variableValue = "\"" + variableValue[0:10] + "\""
+
+            finalData = variableName + " " + "value="+variableValue  + " " + timestamp
+            build_version_metrics.append(finalData)
+
+    return build_version_metrics
+
+def prepare_report(data, uuid, prefix=None):
 
     # final report
     reported_metrics = []
 
+    def getFormatedData(data):
+
+        tuple_length = len(data)
+        mask_length = tuple_length - 1  # if tuple_length > 1 else 0
+        mask = ""
+        if mask_length > 0:
+            mask = ",type=%s"
+        
+        mask += " value=%s"
+        
+        return mask % data
+
     # resolves embedded metric names (when reports returns more than one value, with subnames)
-    def dig(r, data):
+    def dig(r, data, uuid):
         if isinstance(data, list):
             multi = []
             for d in data:
-                multi.append(dig(r, d))
+                temp_data = getFormatedData(d)
+                finaldata = "{},instance={}".format(r,uuid)
+                finaldata += temp_data + " " + timestamp
+                reported_metrics.append(finaldata)
             return multi
 
-        tuple_length = len(data)
-
-        mask_length = tuple_length - 1  # if tuple_length > 1 else 0
-        mask = ".".join(["%s" for _ in range(mask_length)])
-
-        if len(mask) > 0:
-            mask = "{}.{}".format(r, mask)
-        else:
-            mask = "{}".format(r)
-        mask += " %s"  # finaly mask is '%s.%s.%s %s'
-        return mask % data
+        else :
+            temp_data = getFormatedData(data)
+            finaldata = "{},instance={}".format(r,uuid)
+            finaldata += temp_data + " " + timestamp
+            return finaldata
+        
 
     for metric, v in data.items():
-        digged = dig("{}".format(metric), v)
-        if isinstance(digged, list):
-            for metric in digged:
-                reported_metrics.append(metric)
-        else:
-            reported_metrics.append(digged)
+        report_data = dig("{}".format(metric), v, uuid)
+        if isinstance(report_data, list):
+            for single_row in report_data :
+                reported_metrics.append(single_row)
+        else :
+            reported_metrics.append(report_data)
 
     return reported_metrics
 
@@ -122,13 +156,15 @@ if __name__ == "__main__":
         connection = psycopg2.connect(config)
         uuid = _query(connection, QUERIES['uuid'], single=True)[0]  # tuple
         raw_report = report(connection)
-        results = prepare_report(raw_report)
+        query_results_metrics = prepare_report(raw_report,uuid)
+        buid_version_metrics = getBuildVersionData()
+        final_result = query_results_metrics + buid_version_metrics
+        for row in final_result :
+            print row
+        
+        
     except (Exception, psycopg2.DatabaseError) as error:
         print error
     finally:
         if connection:
             connection.close()
-    timestamp = datetime.datetime.now().strftime("%s000000000")
-    for metric in results:
-        metric_name, metric_value = metric.split(" ")
-        print("{},instance={} value={} {}".format(metric_name, uuid, metric_value, timestamp))
