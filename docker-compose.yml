@@ -12,7 +12,14 @@
 version: '3.5'
 services:
   scheduler:
-    image: registry.forge.orange-labs.fr/opensource/fossology:o-master-docker-deploy
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+      - http_proxy
+      - https_proxy
+      - no_proxy
+    image: fossology
     restart: unless-stopped
     environment:
       - FOSSOLOGY_DB_HOST=db
@@ -25,7 +32,14 @@ services:
     volumes:
       - repository:/srv/fossology/repository/
   web:
-    image: registry.forge.orange-labs.fr/opensource/fossology:o-master-docker-deploy
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+      - http_proxy
+      - https_proxy
+      - no_proxy
+    image: fossology
     restart: unless-stopped
     environment:
       - FOSSOLOGY_DB_HOST=db
@@ -33,12 +47,9 @@ services:
       - FOSSOLOGY_DB_USER=fossy
       - FOSSOLOGY_DB_PASSWORD=fossy
       - FOSSOLOGY_SCHEDULER_HOST=scheduler
-      - FOSSDASH_URL=http://influxdb:8086
     command: web
     ports:
-      - 80:80
-      - 443:443
-      - 8080:8080 # Required for the REST-API proxy hack
+      - 8082:80
     depends_on:
       - db
       - scheduler
@@ -54,6 +65,7 @@ services:
       - POSTGRES_INITDB_ARGS='-E SQL_ASCII'
     volumes:
       - database:/var/lib/postgresql/data
+
 volumes:
   database:
   repository:

@@ -5,13 +5,16 @@ TOP = ../..
 VARS = $(TOP)/Makefile.conf
 include $(VARS)
 
-all: dbcreate dbmigrate_pfile_calculate_sha256.php dbmigrate_change_db_encoding.php
+all: dbcreate db.cron dbmigrate_pfile_calculate_sha256.php dbmigrate_change_db_encoding.php
 
 # include the preprocessing stuff
 include $(TOP)/Makefile.process
 # generate the dbcreate script
 dbcreate: dbcreate-process
 	chmod +x dbcreate
+
+# generate db.cron
+db.cron: db.cron-process
 
 # generate the pfile hash script
 dbmigrate_pfile_calculate_sha256.php:	dbmigrate_pfile_calculate_sha256-process_php
@@ -97,7 +100,7 @@ uninstall:
 	@echo "  Remove by hand if you desire."
 
 clean:
-	rm -f core dbcreate
+	rm -f core dbcreate db.cron
 
 test: all
 	@echo "NOTICE: no tests available for db"

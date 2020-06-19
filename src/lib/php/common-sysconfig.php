@@ -388,9 +388,18 @@ function Populate_sysconfig()
 
   $variable = "FossDashReportingAPIUrl";
   $fossdashApiUrlPrompt = _('FossDash Endpoint URL');
+  $URLValid = "check_email_address";
   $fossdashApiUrlDesc = _('Set the FossDash service endpoint. Disabled if empty.');
-  $valueArray[$variable] = array("'$variable'", "null", "'$fossdashApiUrlPrompt'",
-    strval(CONFIG_TYPE_TEXT), "'FossDashAPI'", "1", "'$fossdashApiUrlDesc'", "null", "null");
+  $valueArray[$variable] = array("'$variable'", "'http://localhost:8086'", "'$fossdashApiUrlPrompt'",
+    strval(CONFIG_TYPE_TEXT), "'FossDashAPI'", "1", "'$fossdashApiUrlDesc'", "'$URLValid'", "null");
+
+  
+  // $variable = "FossDashScriptCronSchedule";
+  // $FossDashScriptCronSchedulePromt = _('cron job schedule for FossDash script');
+  // $cronIntervalCheck= "check_cron_job_inteval";
+  // $FossDashScriptCronScheduleDesc = _('Set the cron job of python script for pushing data to time series db.');
+  // $valueArray[$variable] = array("'$variable'", "'*/1 * * * *'", "'$FossDashScriptCronSchedulePromt'",
+  //   strval(CONFIG_TYPE_TEXT), "'FossDashAPI'", "1", "'$FossDashScriptCronScheduleDesc'", "'$cronIntervalCheck'", "null");
 
   $variable = "SkipFiles";
   $mimeTypeToSkip = _("Skip MimeTypes from scanning");
@@ -429,6 +438,12 @@ function Populate_sysconfig()
     }
     unset($VarRec);
   }
+
+  // FIx me ==> need to give common path for docker as well as for the source code
+  $command = escapeshellcmd('python /usr/local/lib/fossology/run_me.py');
+  $output = shell_exec($command);
+  // file_put_contents('php://stderr', "Output of exec command = {$output} \n");
+
 }
 
 /**
@@ -631,12 +646,12 @@ function is_available($url, $timeout = 2, $tries = 2)
  */
 function check_url($url)
 {
-  if (empty($url) ||
-    preg_match("@^((http)|(https)|(ftp))://([[:alnum:]]+)@i", $url) != 1 ||
-    preg_match("@[[:space:]]@", $url) != 0) {
-    return 0;
-  } else {
+  if ( filter_var($url, FILTER_VALIDATE_URL) && 
+    preg_match("^((http)|(https)|(ftp)|(www)|(localhost))(:?)(\/?\/?)(.*)", $url) == 1)
+  {
     return 1;
+  } else {
+    return 0;
   }
 }
 
@@ -649,4 +664,15 @@ function check_IP($ip)
 {
   $e = "([0-9]|1[0-9]{2}|[1-9][0-9]|2[0-4][0-9]|25[0-5])";
   return preg_match("/^$e\.$e\.$e\.$e$/", $ip);
+}
+
+/**
+ * \brief Check if the cron job schedule interval is valid
+ * \param string $cron_interval cron job interval
+ * \return 1: yes , 0: no
+ */
+function check_cron_job_inteval($cron_interval)
+{
+  $cron_regex = "(@(annually|yearly|monthly|weekly|daily|hourly|reboot))|(@every (\d+(ns|us|µs|ms|s|m|h))+)|((((\d+,)+\d+|(\d+(\/|-)\d+)|\d+|\*) ?){5,7})";
+  return preg_match($cron_regex, $cron_interval);
 }
