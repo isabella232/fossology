@@ -13,7 +13,7 @@ CONFPATH = $(SYSCONFDIR)
 # default version is the scm revision number
 -DVERSION=$(SCM_REV)
 
-all: fo-postinstall defconf/Db.conf defconf/fossology.conf db/dbcreate
+all: fo-postinstall defconf/Db.conf defconf/fossology.conf db/dbcreate db/db.cron.in
 
 # include the preprocessing stuff
 include $(TOP)/Makefile.process
@@ -35,6 +35,9 @@ install_offline: install
 
 install: all
 	$(INSTALL_PROGRAM) fo-postinstall $(DESTDIR)$(LIBEXECDIR)/fo-postinstall
+	$(INSTALL_PROGRAM) ./fossdash/run_me.py $(DESTDIR)$(LIBEXECDIR)/run_me.py
+	$(INSTALL_PROGRAM) ./fossdash/fossdash-publish.run $(DESTDIR)$(LIBEXECDIR)/fossdash-publish.run
+	$(INSTALL_PROGRAM) ./fossdash/fossdash-publish.py $(DESTDIR)$(LIBEXECDIR)/fossdash-publish.py
 	$(INSTALL_PROGRAM) fo_dbcheck.php $(DESTDIR)$(LIBEXECDIR)/fo_dbcheck.php
 	$(INSTALL_PROGRAM) fossinit.php $(DESTDIR)$(LIBEXECDIR)/fossinit.php
 	$(INSTALL_PROGRAM) fossinit-common.php $(DESTDIR)$(LIBEXECDIR)/fossinit-common.php
@@ -68,6 +71,14 @@ install: all
 	 	$(INSTALL) -m 666 defconf/fossology.conf $(DESTDIR)$(CONFPATH)/fossology.conf; \
 	else \
 		echo "WARNING: $(DESTDIR)$(CONFPATH)/fossology.conf already exists."; \
+		echo "  Not overwriting, consider checking it by hand or use the OVERWRITE option."; \
+	fi
+
+	@if [ ! -f $(DESTDIR)$(CONFPATH)/fossdash.conf -o "$(OVERWRITE)" ]; then \
+		echo "NOTE: using default version for $(DESTDIR)$(CONFPATH)/fossdash.conf"; \
+	 	$(INSTALL) -m 666 defconf/fossdash.conf $(DESTDIR)$(CONFPATH)/fossdash.conf; \
+	else \
+		echo "WARNING: $(DESTDIR)$(CONFPATH)/fossdash.conf already exists."; \
 		echo "  Not overwriting, consider checking it by hand or use the OVERWRITE option."; \
 	fi
 

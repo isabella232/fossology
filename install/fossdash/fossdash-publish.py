@@ -4,6 +4,7 @@
 # SPDX-License-Identifier: GPL-2.0
 # Author: Nicolas Toussaint <nicolas1.toussaint@orange.com>
 # Author: Bartlomiej Drozdz <bartlomiej.drozdz@orange.com>
+# Author: Darshan Kansagara <kansagara.darshan97@gmail.com>
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -28,18 +29,18 @@ import datetime
 #
 # /!\ FIXME: Variable DB_CONFIG_FILE will not be availble in CRON context
 #
-DB_CONFIG_FILE = os.environ.get("DB_CONFIG_FILE","/usr/local/etc/fossology/Db.conf")
-CONFIG = {}
+DB_CONFIG_FILE = "/usr/local/etc/fossology/Db.conf"
+CONFIG_STATIC = dict()
 # parse DB_CONFIG_FILE
 with open(DB_CONFIG_FILE, mode="r") as dbf:
     config_entry = dbf.readline()
     while config_entry:
         config_entry = config_entry.split("=")
-        CONFIG[config_entry[0]] = config_entry[1].strip().replace(";", "")
+        CONFIG_STATIC[config_entry[0]] = config_entry[1].strip().replace(";", "")
         config_entry = dbf.readline()
 
 # produces "conf1=val1 conf2=val2 conf3=val3 ..."
-config = " ".join(["=".join(config) for config in CONFIG.items()])
+config = " ".join(["=".join(config) for config in CONFIG_STATIC.items()])
 
 timestamp = datetime.datetime.now().strftime("%s000000000")
 

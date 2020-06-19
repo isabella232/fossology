@@ -25,11 +25,6 @@ user=$db_user;
 password=$db_password;
 EOM
 
-# FossDash configuration
-# FIXME: File location may not work outside of Docker environment
-# This file is used in install/fossdash/fossdash-publish.run
-env|grep FOSSDASH > /usr/local/etc/fossology/fossdash.conf || echo "No FOSSDASH configuration found."
-
 sed -i 's/address = .*/address = '"${FOSSOLOGY_SCHEDULER_HOST:-localhost}"'/' \
     /usr/local/etc/fossology/fossology.conf
 
