@@ -388,7 +388,7 @@ function Populate_sysconfig()
 
   $variable = "FossDashReportingAPIUrl";
   $fossdashApiUrlPrompt = _('FossDash Endpoint URL');
-  $URLValid = "check_email_address";
+  $URLValid = "check_url";
   $fossdashApiUrlDesc = _('Set the FossDash service endpoint. Disabled if empty.');
   $valueArray[$variable] = array("'$variable'", "'http://localhost:8086'", "'$fossdashApiUrlPrompt'",
     strval(CONFIG_TYPE_TEXT), "'FossDashAPI'", "1", "'$fossdashApiUrlDesc'", "'$URLValid'", "null");
@@ -647,7 +647,7 @@ function is_available($url, $timeout = 2, $tries = 2)
 function check_url($url)
 {
   if ( filter_var($url, FILTER_VALIDATE_URL) && 
-    preg_match("^((http)|(https)|(ftp)|(www)|(localhost))(:?)(\/?\/?)(.*)", $url) == 1)
+      preg_match("#^((http)|(https)|(ftp)|(www)|(localhost))://(.*)#", $url) == 1)
   {
     return 1;
   } else {

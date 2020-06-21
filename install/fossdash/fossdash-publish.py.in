@@ -26,10 +26,7 @@ import psycopg2
 import datetime
 
 # Fossology DB configuration file
-#
-# /!\ FIXME: Variable DB_CONFIG_FILE will not be availble in CRON context
-#
-DB_CONFIG_FILE = "/usr/local/etc/fossology/Db.conf"
+DB_CONFIG_FILE = "{$SYSCONFDIR}/Db.conf"
 CONFIG_STATIC = dict()
 # parse DB_CONFIG_FILE
 with open(DB_CONFIG_FILE, mode="r") as dbf:
@@ -51,7 +48,7 @@ QUERIES_NAME = [
     "reportgen_count", "pfile_count", "avg_pfile_count", "job_count"
 ]
 
-QUERIES = {
+QUERIES = \{
 
     'uuid': "SELECT instance_uuid uuid FROM instance;",
     'number_of_users': "SELECT count(u.*) AS users FROM users u;",
@@ -67,7 +64,7 @@ QUERIES = {
     "avg_pfile_count": "select round(avg(pfile_size)) from pfile;",
     "job_count": "select count(*) as jobs from job;"
     
-}
+\}
 
 def _query(connection, query, single=False):
     cur = connection.cursor()
@@ -77,7 +74,7 @@ def _query(connection, query, single=False):
 
 
 def report(connection):
-    _result = {}
+    _result = dict()
     for query in QUERIES_NAME:
         result = _query(connection, QUERIES[query])
         if result:
@@ -89,7 +86,7 @@ def getBuildVersionData() :
     # final build version report metric
     build_version_metrics = []
 
-    with open("/usr/local/etc/fossology/VERSION","r") as verf:
+    with open("{$SYSCONFDIR}/VERSION","r") as verf:
         for i, line in enumerate(verf):
             if i == 0 : # to skip the first line of heading 
                 continue
@@ -129,20 +126,20 @@ def prepare_report(data, uuid, prefix=None):
             multi = []
             for d in data:
                 temp_data = getFormatedData(d)
-                finaldata = "{},instance={}".format(r,uuid)
+                finaldata = "\{\},instance=\{\}".format(r,uuid)
                 finaldata += temp_data + " " + timestamp
                 reported_metrics.append(finaldata)
             return multi
 
         else :
             temp_data = getFormatedData(data)
-            finaldata = "{},instance={}".format(r,uuid)
+            finaldata = "\{\},instance=\{\}".format(r,uuid)
             finaldata += temp_data + " " + timestamp
             return finaldata
         
 
     for metric, v in data.items():
-        report_data = dig("{}".format(metric), v, uuid)
+        report_data = dig("\{\}".format(metric), v, uuid)
         if isinstance(report_data, list):
             for single_row in report_data :
                 reported_metrics.append(single_row)

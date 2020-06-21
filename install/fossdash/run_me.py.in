@@ -21,7 +21,7 @@ import psycopg2
 import os
 
 # Reading the db config file
-DB_CONFIG_FILE = "/usr/local/etc/fossology/Db.conf"
+DB_CONFIG_FILE = "{$SYSCONFDIR}/Db.conf"
 CONFIG_STATIC = dict()
 # parse DB_CONFIG_FILE
 with open(DB_CONFIG_FILE, mode="r") as dbf:
@@ -59,7 +59,7 @@ else :
 
     try :
         # Writting FossDash URL into fossdash.conf file
-        f = open("/usr/local/etc/fossology/fossdash.conf", "w+")
+        f = open("{$SYSCONFDIR}/fossdash.conf", "w+")
         f.write("FOSSDASH_URL="+fossdash_url)
         f.close()
     except Exception as e :
