@@ -22,8 +22,7 @@
 echo
 echo "$(date) - $0 - $*"
 
-# FIXME: File location may not work outside of Docker environment
-. /usr/local/etc/fossology/fossdash.conf
+. {$SYSCONFDIR}/fossdash.conf
 [ -z "$FOSSDASH_URL" ] && echo "Missing FOSSDASH_URL variable. Exiting." && exit 0
 
 which python >/dev/null || exit 1
@@ -38,15 +37,15 @@ echo "tmp_file= $tmp_file"
 echo "Fossology instance IDs:"
 sed 's/.*instance=\([^ ]*\).*$/\1/'  $tmp_file | sort | uniq | cat -n
 
-f_post_data() {
+f_post_data() \{
    curl \
     --silent --show-error --output /dev/null \
     -i -XPOST "$FOSSDASH_URL/write?db=$database" \
     --data-binary @$1
-}
+\}
 
 echo
-echo "Sending metrics to ${FOSSDASH_URL}"
+echo "Sending metrics to $\{FOSSDASH_URL\}"
 f_post_data $tmp_file || exit 1
 
 # mark as 'send'
@@ -63,4 +62,3 @@ do
     echo "Reporting file moved to /tmp/$report_file.reported"
     mv /tmp/$report_file /tmp/$report_file.reported
 done
-
