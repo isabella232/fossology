@@ -21,9 +21,11 @@
 
 import os
 import time
-
 import psycopg2
 import datetime
+import random
+import string 
+import requests
 
 # Fossology DB configuration file
 DB_CONFIG_FILE = "{$SYSCONFDIR}/Db.conf"
@@ -48,6 +50,7 @@ QUERIES_NAME = [
     "reportgen_count", "pfile_count", "avg_pfile_count", "job_count"
 ]
 
+# All Query metrics data needs to publish
 QUERIES = \{
 
     'uuid': "SELECT instance_uuid uuid FROM instance;",
@@ -66,13 +69,18 @@ QUERIES = \{
     
 \}
 
+# generating random ASCII chaacter string of length N
+def getRandomString(N):
+    return ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(N))
+
+# execute given query and return result
 def _query(connection, query, single=False):
     cur = connection.cursor()
     cur.execute(query)
     result = cur.fetchone() if single else cur.fetchall()
     return result
 
-
+# execute all QUERIES and return corresponding result of each query.
 def report(connection):
     _result = dict()
     for query in QUERIES_NAME:
@@ -82,10 +90,10 @@ def report(connection):
             # print "==> ", _result[query]
     return _result
 
+# fetch Build and version Data from VERSION file
 def getBuildVersionData() :
     # final build version report metric
     build_version_metrics = []
-
     with open("{$SYSCONFDIR}/VERSION","r") as verf:
         for i, line in enumerate(verf):
             if i == 0 : # to skip the first line of heading 
@@ -93,6 +101,19 @@ def getBuildVersionData() :
             version_entry_array = line.split("=")
             variableName = version_entry_array[0].lower()
             variableValue = version_entry_array[1].strip()
+            if i == 1 :
+                variableValueArray = variableValue.split('-')
+                print variableValueArray
+                variableValueArray[0] = variableValueArray[0].replace('"','')
+                finalData = "version" + " " + "value=\""+variableValueArray[0]  + "\" " + timestamp
+                build_version_metrics.append(finalData)
+                variableValueArray[1] = variableValueArray[1].replace('"','')
+                finalData = "total_commit" + " " + "value=\""+variableValueArray[1]  + "\" " + timestamp
+                build_version_metrics.append(finalData)
+                variableValueArray[2] = variableValueArray[2].replace('"','')
+                finalData = "latest_commit_id" + " " + "value=\""+variableValueArray[2]  + "\" " + timestamp
+                build_version_metrics.append(finalData)
+                continue
             if i == 3 : # to convert commit hash to string
                 variableValue = "\"" + variableValue + "\""
             elif i == 4 or i == 5 : # to adjust DATEs value in string formate
@@ -103,6 +124,7 @@ def getBuildVersionData() :
 
     return build_version_metrics
 
+# final report prepared as per influx DB data dump formate
 def prepare_report(data, uuid, prefix=None):
 
     # final report
@@ -148,18 +170,50 @@ def prepare_report(data, uuid, prefix=None):
 
     return reported_metrics
 
+def getAllMetricsData(connection):
+    
+    uuid = _query(connection, QUERIES['uuid'], single=True)[0]  # tuple
+    raw_report = report(connection)
+    # print raw_report
+    query_results_metrics = prepare_report(raw_report,uuid)
+    buid_version_metrics = getBuildVersionData()
+    final_result = query_results_metrics + buid_version_metrics
+    return final_result
+ 
+# Publish the generated temp_data metrics file into influxDB via API.
+def pushMetricsToInflux(connection,file_name):
+    
+    ## fetching fossdash reporting URL of influxDB
+    fossdash_url_query = "select conf_value from sysconfig where variablename='FossDashReportingAPIUrl'"
+    fossdash_url_record = _query(connection,fossdash_url_query,True)
+    fossdash_url = ""
+    if fossdash_url_record == None :
+        print("No record found with variable name FossDashReportingAPIUrl")
+    else :
+        fossdash_url = fossdash_url_record[0]
+    
+    print "publishing FossDash URL = "+ fossdash_url
+    file_data = open(file_name, 'rb').read() 
+    r = requests.post(fossdash_url, data=file_data)
+    print r.text
+    print "status code = " + str(r.status_code)
+    
+
 if __name__ == "__main__":
     connection = None
+    print datetime.datetime.now()
     try:
         connection = psycopg2.connect(config)
-        uuid = _query(connection, QUERIES['uuid'], single=True)[0]  # tuple
-        raw_report = report(connection)
-        query_results_metrics = prepare_report(raw_report,uuid)
-        buid_version_metrics = getBuildVersionData()
-        final_result = query_results_metrics + buid_version_metrics
-        for row in final_result :
-            print row
-        
+        final_metrics = getAllMetricsData(connection)
+        print "All data metrics Generated"
+        file_name = "/tmp/"+os.path.basename(__file__)+"."+getRandomString(6)
+        with open(file_name,"w+") as f:
+            for row in final_metrics:
+                f.write(row)
+                f.write("\n")
+        print "File created with all metrics = "+file_name
+        pushMetricsToInflux(connection,file_name)
+        print "\n\n"
         
     except (Exception, psycopg2.DatabaseError) as error:
         print error

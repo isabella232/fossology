@@ -13,7 +13,7 @@ CONFPATH = $(SYSCONFDIR)
 # default version is the scm revision number
 -DVERSION=$(SCM_REV)
 
-all: fo-postinstall defconf/Db.conf defconf/fossology.conf fossdash/fossdash-publish.py fossdash/fossdash-publish.run fossdash/run_me.py db/dbcreate db/db.cron.in
+all: fo-postinstall defconf/Db.conf defconf/fossology.conf fossdash/fossdash-publish.py db/dbcreate db/db.cron.in
 
 # include the preprocessing stuff
 include $(TOP)/Makefile.process
@@ -28,12 +28,6 @@ defconf/Db.conf: defconf/Db.conf-process
 # generate the fossdash-publish.py file
 fossdash/fossdash-publish.py: fossdash/fossdash-publish.py-process
 
-# generate the fossdash-publish.run file
-fossdash/fossdash-publish.run: fossdash/fossdash-publish.run-process
-
-# generate run_me.py
-fossdash/run_me.py: fossdash/run_me.py-process
-
 # generate fossology.conf
 defconf/fossology.conf:	defconf/fossology.conf-process
 
@@ -44,8 +38,6 @@ install_offline: install
 
 install: all
 	$(INSTALL_PROGRAM) fo-postinstall $(DESTDIR)$(LIBEXECDIR)/fo-postinstall
-	$(INSTALL_PROGRAM) ./fossdash/run_me.py $(DESTDIR)$(LIBEXECDIR)/run_me.py
-	$(INSTALL_PROGRAM) ./fossdash/fossdash-publish.run $(DESTDIR)$(LIBEXECDIR)/fossdash-publish.run
 	$(INSTALL_PROGRAM) ./fossdash/fossdash-publish.py $(DESTDIR)$(LIBEXECDIR)/fossdash-publish.py
 	$(INSTALL_PROGRAM) fo_dbcheck.php $(DESTDIR)$(LIBEXECDIR)/fo_dbcheck.php
 	$(INSTALL_PROGRAM) fossinit.php $(DESTDIR)$(LIBEXECDIR)/fossinit.php
@@ -80,14 +72,6 @@ install: all
 	 	$(INSTALL) -m 666 defconf/fossology.conf $(DESTDIR)$(CONFPATH)/fossology.conf; \
 	else \
 		echo "WARNING: $(DESTDIR)$(CONFPATH)/fossology.conf already exists."; \
-		echo "  Not overwriting, consider checking it by hand or use the OVERWRITE option."; \
-	fi
-
-	@if [ ! -f $(DESTDIR)$(CONFPATH)/fossdash.conf -o "$(OVERWRITE)" ]; then \
-		echo "NOTE: using default version for $(DESTDIR)$(CONFPATH)/fossdash.conf"; \
-	 	$(INSTALL) -m 666 defconf/fossdash.conf $(DESTDIR)$(CONFPATH)/fossdash.conf; \
-	else \
-		echo "WARNING: $(DESTDIR)$(CONFPATH)/fossdash.conf already exists."; \
 		echo "  Not overwriting, consider checking it by hand or use the OVERWRITE option."; \
 	fi
 
@@ -145,7 +129,7 @@ uninstall:
 	$(MAKE) -s -C db uninstall
 
 clean:
-	rm -f fo-postinstall defconf/Db.conf defconf/fossology.conf fossdash/fossdash-publish.py fossdash/fossdash-publish.run fossdash/run_me.py
+	rm -f fo-postinstall defconf/Db.conf defconf/fossology.conf fossdash/fossdash-publish.py
 	$(MAKE) -s -C db clean
 
 test: all
