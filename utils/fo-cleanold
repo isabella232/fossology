@@ -105,7 +105,6 @@ NEWSAVE="
 /usr/local/etc/default/fossology
 /usr/local/etc/fossology/Db.conf
 /usr/local/etc/fossology/fossology.conf
-/usr/local/etc/fossology/fossdash.conf
 /usr/local/etc/fossology/VERSION
 /usr/local/etc/fossology/samplefooter.txt
 /usr/local/etc/fossology/sampleheader.txt

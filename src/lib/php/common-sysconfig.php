@@ -390,7 +390,7 @@ function Populate_sysconfig()
   $fossdashApiUrlPrompt = _('FossDash Endpoint URL');
   $URLValid = "check_url";
   $fossdashApiUrlDesc = _('Set the FossDash service endpoint. Disabled if empty.');
-  $valueArray[$variable] = array("'$variable'", "'http://localhost:8086'", "'$fossdashApiUrlPrompt'",
+  $valueArray[$variable] = array("'$variable'", "'http://localhost:8086/write?db=fossology_db'", "'$fossdashApiUrlPrompt'",
     strval(CONFIG_TYPE_TEXT), "'FossDashAPI'", "1", "'$fossdashApiUrlDesc'", "'$URLValid'", "null");
 
   
@@ -438,11 +438,6 @@ function Populate_sysconfig()
     }
     unset($VarRec);
   }
-
-  // FIx me ==> need to give common path for docker as well as for the source code
-  $command = escapeshellcmd('python /usr/local/lib/fossology/run_me.py');
-  $output = shell_exec($command);
-  // file_put_contents('php://stderr', "Output of exec command = {$output} \n");
 
 }
 
