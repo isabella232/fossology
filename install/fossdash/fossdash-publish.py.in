@@ -25,6 +25,7 @@ import psycopg2
 import datetime
 import random
 import string 
+import re
 import requests
 
 # Fossology DB configuration file
@@ -95,15 +96,15 @@ def getBuildVersionData() :
     # final build version report metric
     build_version_metrics = []
     with open("{$SYSCONFDIR}/VERSION","r") as verf:
-        for i, line in enumerate(verf):
-            if i == 0 : # to skip the first line of heading 
+        for line_number, line in enumerate(verf):
+            if line_number == 0 : # to skip the first line of heading 
                 continue
             version_entry_array = line.split("=")
             variableName = version_entry_array[0].lower()
             variableValue = version_entry_array[1].strip()
-            if i == 1 :
+            if line_number == 1 :
                 variableValueArray = variableValue.split('-')
-                print variableValueArray
+                # print variableValueArray
                 variableValueArray[0] = variableValueArray[0].replace('"','')
                 finalData = "version" + " " + "value=\""+variableValueArray[0]  + "\" " + timestamp
                 build_version_metrics.append(finalData)
@@ -114,9 +115,9 @@ def getBuildVersionData() :
                 finalData = "latest_commit_id" + " " + "value=\""+variableValueArray[2]  + "\" " + timestamp
                 build_version_metrics.append(finalData)
                 continue
-            if i == 3 : # to convert commit hash to string
+            if line_number == 3 : # to convert commit hash to string
                 variableValue = "\"" + variableValue + "\""
-            elif i == 4 or i == 5 : # to adjust DATEs value in string formate
+            elif line_number == 4 or line_number == 5 : # to adjust DATEs value in string formate
                 variableValue = "\"" + variableValue[0:10] + "\""
 
             finalData = variableName + " " + "value="+variableValue  + " " + timestamp
@@ -143,25 +144,25 @@ def prepare_report(data, uuid, prefix=None):
         return mask % data
 
     # resolves embedded metric names (when reports returns more than one value, with subnames)
-    def dig(r, data, uuid):
+    def dig(metric_name, data, uuid):
         if isinstance(data, list):
             multi = []
             for d in data:
                 temp_data = getFormatedData(d)
-                finaldata = "\{\},instance=\{\}".format(r,uuid)
+                finaldata = "\{\},instance=\{\}".format(metric_name,uuid)
                 finaldata += temp_data + " " + timestamp
                 reported_metrics.append(finaldata)
             return multi
 
         else :
             temp_data = getFormatedData(data)
-            finaldata = "\{\},instance=\{\}".format(r,uuid)
+            finaldata = "\{\},instance=\{\}".format(metric_name,uuid)
             finaldata += temp_data + " " + timestamp
             return finaldata
         
 
-    for metric, v in data.items():
-        report_data = dig("\{\}".format(metric), v, uuid)
+    for metric_name, metric_vals in data.items():
+        report_data = dig("\{\}".format(metric_name), metric_vals, uuid)
         if isinstance(report_data, list):
             for single_row in report_data :
                 reported_metrics.append(single_row)
@@ -180,10 +181,9 @@ def getAllMetricsData(connection):
     final_result = query_results_metrics + buid_version_metrics
     return final_result
  
-# Publish the generated temp_data metrics file into influxDB via API.
-def pushMetricsToInflux(connection,file_name):
+## fetching fossdash reporting URL from database
+def getFossDashURL(connection) :
     
-    ## fetching fossdash reporting URL of influxDB
     fossdash_url_query = "select conf_value from sysconfig where variablename='FossDashReportingAPIUrl'"
     fossdash_url_record = _query(connection,fossdash_url_query,True)
     fossdash_url = ""
@@ -193,11 +193,22 @@ def pushMetricsToInflux(connection,file_name):
         fossdash_url = fossdash_url_record[0]
     
     print "publishing FossDash URL = "+ fossdash_url
-    file_data = open(file_name, 'rb').read() 
-    r = requests.post(fossdash_url, data=file_data)
-    print r.text
-    print "status code = " + str(r.status_code)
+    return fossdash_url
+
+# Publish the generated temp_data metrics file into influxDB via API.
+def pushMetricsToInflux(fossdash_url,file_path):
     
+    print "sending file to influxDB = "+file_path
+    file_data = open(file_path, 'rb').read() 
+    fossdash_response = requests.post(fossdash_url, data=file_data)
+    print "status code = " + str(fossdash_response.status_code)
+    if fossdash_response.status_code == 200 or fossdash_response.status_code == 204 :
+        try :
+            os.rename(file_path, file_path+".reported") 
+        except (Exception) as error:
+            print error
+    else :
+        print fossdash_response.text
 
 if __name__ == "__main__":
     connection = None
@@ -206,14 +217,24 @@ if __name__ == "__main__":
         connection = psycopg2.connect(config)
         final_metrics = getAllMetricsData(connection)
         print "All data metrics Generated"
-        file_name = "/tmp/"+os.path.basename(__file__)+"."+getRandomString(6)
-        with open(file_name,"w+") as f:
+        dir_name = "/tmp/"
+        file_path = dir_name + os.path.basename(__file__) + "." + getRandomString(6)
+
+        # writting final resulted metrics into a file
+        with open(file_path,"w+") as f:
             for row in final_metrics:
                 f.write(row)
                 f.write("\n")
-        print "File created with all metrics = "+file_name
-        pushMetricsToInflux(connection,file_name)
-        print "\n\n"
+
+        fossdash_url = getFossDashURL(connection)
+        pushMetricsToInflux(fossdash_url,file_path)
+        
+        # gathering all unreported files and trying to publish them again
+        unreported_files = [f for f in os.listdir(dir_name) if re.match(r'fossdash-publish.py.*(?<!(reported))$', f)]
+        for file_name in unreported_files :
+            pushMetricsToInflux(fossdash_url,os.path.join(dir_name,file_name))
+
+        print "\n"
         
     except (Exception, psycopg2.DatabaseError) as error:
         print error
