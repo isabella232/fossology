@@ -1,0 +1,243 @@
+#!/usr/bin/env python
+#
+# Copyright (C) 2020 Orange
+# SPDX-License-Identifier: GPL-2.0
+# Author: Nicolas Toussaint <nicolas1.toussaint@orange.com>
+# Author: Bartlomiej Drozdz <bartlomiej.drozdz@orange.com>
+# Author: Darshan Kansagara <kansagara.darshan97@gmail.com>
+#
+# This program is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License
+# version 2 as published by the Free Software Foundation.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+import os
+import time
+import psycopg2
+import datetime
+import random
+import string 
+import re
+import requests
+
+# Fossology DB configuration file
+DB_CONFIG_FILE = "{$SYSCONFDIR}/Db.conf"
+CONFIG_STATIC = dict()
+# parse DB_CONFIG_FILE
+with open(DB_CONFIG_FILE, mode="r") as dbf:
+    config_entry = dbf.readline()
+    while config_entry:
+        config_entry = config_entry.split("=")
+        CONFIG_STATIC[config_entry[0]] = config_entry[1].strip().replace(";", "")
+        config_entry = dbf.readline()
+
+# produces "conf1=val1 conf2=val2 conf3=val3 ..."
+config = " ".join(["=".join(config) for config in CONFIG_STATIC.items()])
+
+timestamp = datetime.datetime.now().strftime("%s000000000")
+
+QUERIES_NAME = [
+    "number_of_users", "number_of_groups", "number_of_file_uploads",
+    "number_of_projects__theoretically", "number_of_url_uploads",
+    "agents_count", "number_of_upload_status", "number_of_projects_per_size",
+    "reportgen_count", "pfile_count", "avg_pfile_count", "job_count"
+]
+
+# All Query metrics data needs to publish
+QUERIES = \{
+
+    'uuid': "SELECT instance_uuid uuid FROM instance;",
+    'number_of_users': "SELECT count(u.*) AS users FROM users u;",
+    'number_of_groups': "SELECT count(g.*) AS groups FROM groups g;",
+    'number_of_projects__theoretically': "SELECT count(up.*) as uploads from (select distinct upload_mode, upload_origin from upload) up;",
+    'number_of_file_uploads': "SELECT count(up1.upload_origin) as file_uploads FROM upload up1 WHERE up1.upload_mode = 104;",
+    'number_of_url_uploads': "SELECT count(up2.upload_origin) as url_uploads FROM upload up2 WHERE up2.upload_mode = 100;",
+    'agents_count': "SELECT ag.agent_name,count(jq.*) AS fired_jobs FROM agent ag LEFT OUTER JOIN jobqueue jq ON (jq.jq_type = ag.agent_name) GROUP BY ag.agent_name ORDER BY fired_jobs DESC;",
+    'number_of_upload_status': "select CASE WHEN a.status=1 THEN 'open' WHEN a.status=2 THEN 'in_progres' WHEN a.status=3 THEN 'closed' WHEN a.status=3 THEN 'rejected' ELSE 'unknown' END status, a.count from (select status_fk status, count(1) as count from upload_clearing group by status_fk) a;",
+    'number_of_projects_per_size': "select t.size, count(t.size) from (select CASE WHEN s.sx<2000 THEN 'small' WHEN s.sx>=2000 and s.sx<10000 THEN 'normal' ELSE 'big' END size from (select count(ut.ufile_name) sx from uploadtree ut group by upload_fk) s) t group by t.size;",
+    "reportgen_count": "select count(*) from reportgen;",
+    "pfile_count": "select count(*) from pfile;",
+    "avg_pfile_count": "select round(avg(pfile_size)) from pfile;",
+    "job_count": "select count(*) as jobs from job;"
+    
+\}
+
+# generating random ASCII chaacter string of length N
+def getRandomString(N):
+    return ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(N))
+
+# execute given query and return result
+def _query(connection, query, single=False):
+    cur = connection.cursor()
+    cur.execute(query)
+    result = cur.fetchone() if single else cur.fetchall()
+    return result
+
+# execute all QUERIES and return corresponding result of each query.
+def report(connection):
+    _result = dict()
+    for query in QUERIES_NAME:
+        result = _query(connection, QUERIES[query])
+        if result:
+            _result[query] = result if len(result) > 1 else result[0]
+            # print "==> ", _result[query]
+    return _result
+
+# fetch Build and version Data from VERSION file
+def getBuildVersionData() :
+    # final build version report metric
+    build_version_metrics = []
+    with open("{$SYSCONFDIR}/VERSION","r") as verf:
+        for line_number, line in enumerate(verf):
+            if line_number == 0 : # to skip the first line of heading 
+                continue
+            version_entry_array = line.split("=")
+            variableName = version_entry_array[0].lower()
+            variableValue = version_entry_array[1].strip()
+            if line_number == 1 :
+                variableValueArray = variableValue.split('-')
+                # print variableValueArray
+                variableValueArray[0] = variableValueArray[0].replace('"','')
+                finalData = "version" + " " + "value=\""+variableValueArray[0]  + "\" " + timestamp
+                build_version_metrics.append(finalData)
+                variableValueArray[1] = variableValueArray[1].replace('"','')
+                finalData = "total_commit" + " " + "value=\""+variableValueArray[1]  + "\" " + timestamp
+                build_version_metrics.append(finalData)
+                variableValueArray[2] = variableValueArray[2].replace('"','')
+                finalData = "latest_commit_id" + " " + "value=\""+variableValueArray[2]  + "\" " + timestamp
+                build_version_metrics.append(finalData)
+                continue
+            if line_number == 3 : # to convert commit hash to string
+                variableValue = "\"" + variableValue + "\""
+            elif line_number == 4 or line_number == 5 : # to adjust DATEs value in string formate
+                variableValue = "\"" + variableValue[0:10] + "\""
+
+            finalData = variableName + " " + "value="+variableValue  + " " + timestamp
+            build_version_metrics.append(finalData)
+
+    return build_version_metrics
+
+# final report prepared as per influx DB data dump formate
+def prepare_report(data, uuid, prefix=None):
+
+    # final report
+    reported_metrics = []
+
+    def getFormatedData(data):
+
+        tuple_length = len(data)
+        mask_length = tuple_length - 1  # if tuple_length > 1 else 0
+        mask = ""
+        if mask_length > 0:
+            mask = ",type=%s"
+        
+        mask += " value=%s"
+        
+        return mask % data
+
+    # resolves embedded metric names (when reports returns more than one value, with subnames)
+    def dig(metric_name, data, uuid):
+        if isinstance(data, list):
+            multi = []
+            for d in data:
+                temp_data = getFormatedData(d)
+                finaldata = "\{\},instance=\{\}".format(metric_name,uuid)
+                finaldata += temp_data + " " + timestamp
+                reported_metrics.append(finaldata)
+            return multi
+
+        else :
+            temp_data = getFormatedData(data)
+            finaldata = "\{\},instance=\{\}".format(metric_name,uuid)
+            finaldata += temp_data + " " + timestamp
+            return finaldata
+        
+
+    for metric_name, metric_vals in data.items():
+        report_data = dig("\{\}".format(metric_name), metric_vals, uuid)
+        if isinstance(report_data, list):
+            for single_row in report_data :
+                reported_metrics.append(single_row)
+        else :
+            reported_metrics.append(report_data)
+
+    return reported_metrics
+
+def getAllMetricsData(connection):
+    
+    uuid = _query(connection, QUERIES['uuid'], single=True)[0]  # tuple
+    raw_report = report(connection)
+    # print raw_report
+    query_results_metrics = prepare_report(raw_report,uuid)
+    buid_version_metrics = getBuildVersionData()
+    final_result = query_results_metrics + buid_version_metrics
+    return final_result
+ 
+## fetching fossdash reporting URL from database
+def getFossDashURL(connection) :
+    
+    fossdash_url_query = "select conf_value from sysconfig where variablename='FossDashReportingAPIUrl'"
+    fossdash_url_record = _query(connection,fossdash_url_query,True)
+    fossdash_url = ""
+    if fossdash_url_record == None :
+        print("No record found with variable name FossDashReportingAPIUrl")
+    else :
+        fossdash_url = fossdash_url_record[0]
+    
+    print "publishing FossDash URL = "+ fossdash_url
+    return fossdash_url
+
+# Publish the generated temp_data metrics file into influxDB via API.
+def pushMetricsToInflux(fossdash_url,file_path):
+    
+    print "sending file to influxDB = "+file_path
+    file_data = open(file_path, 'rb').read() 
+    fossdash_response = requests.post(fossdash_url, data=file_data)
+    print "status code = " + str(fossdash_response.status_code)
+    if fossdash_response.status_code == 200 or fossdash_response.status_code == 204 :
+        try :
+            os.rename(file_path, file_path+".reported") 
+        except (Exception) as error:
+            print error
+    else :
+        print fossdash_response.text
+
+if __name__ == "__main__":
+    connection = None
+    print datetime.datetime.now()
+    try:
+        connection = psycopg2.connect(config)
+        final_metrics = getAllMetricsData(connection)
+        print "All data metrics Generated"
+        dir_name = "/tmp/"
+        file_path = dir_name + os.path.basename(__file__) + "." + getRandomString(6)
+
+        # writting final resulted metrics into a file
+        with open(file_path,"w+") as f:
+            for row in final_metrics:
+                f.write(row)
+                f.write("\n")
+
+        fossdash_url = getFossDashURL(connection)
+        pushMetricsToInflux(fossdash_url,file_path)
+        
+        # gathering all unreported files and trying to publish them again
+        unreported_files = [f for f in os.listdir(dir_name) if re.match(r'fossdash-publish.py.*(?<!(reported))$', f)]
+        for file_name in unreported_files :
+            pushMetricsToInflux(fossdash_url,os.path.join(dir_name,file_name))
+
+        print "\n"
+        
+    except (Exception, psycopg2.DatabaseError) as error:
+        print error
+    finally:
+        if connection:
+            connection.close()
