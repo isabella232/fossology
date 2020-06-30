@@ -70,6 +70,7 @@ RUN mkdir /usr/share/man/man1 /usr/share/man/man7 \
       cron \
       python \
       python-psycopg2 \
+      python-requests \
  && DEBIAN_FRONTEND=noninteractive /fossology/utils/fo-installdeps --offline --runtime -y \
  && DEBIAN_FRONTEND=noninteractive apt-get purge -y lsb-release \
  && DEBIAN_FRONTEND=noninteractive apt-get autoremove -y \
