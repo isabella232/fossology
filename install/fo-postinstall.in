@@ -197,6 +197,7 @@ if [[ $COMMON ]]; then
       "{$PROJECTSTATEDIR}" \
       "{$PROJECTSTATEDIR}/agents" \
       "{$CACHEDIR}" \
+      "/srv/fossology/repository/fossdash" \
       "$REPO"
 
    chown root:$PROJECTGROUP "{$PROJECTSTATEDIR}" "{$PROJECTSTATEDIR}/agents" {$CACHEDIR}

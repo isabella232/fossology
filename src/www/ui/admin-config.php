@@ -149,6 +149,31 @@ class foconfig extends FO_Plugin
             $this->dbManager->getSingleRow(
               "update sysconfig set conf_value=$1 where variablename=$2",
               array($VarValue, $VarName), __METHOD__ . '.setVarNameData');
+                
+              if($VarName == "FossdashEnableDisable"){
+                if($VarValue == 1){
+                  $exec_fossdash_enable_cmd = "(crontab -l | grep -v fossdash ; echo '* * * * * python2 /usr/local/lib/fossology/fossdash-publish.py >>  /srv/fossology/repository/fossdash/fossdash.log 2>&1') | crontab -";
+                  $output = shell_exec($exec_fossdash_enable_cmd); 
+                  file_put_contents('php://stderr', "output/error of fossdash enable cmd ={$output} \n");
+                }
+                else{
+                  $exec_fossdash_disable_cmd = "crontab -r";
+                  $output = shell_exec($exec_fossdash_disable_cmd); 
+                  file_put_contents('php://stderr', "output/error of fossdash disable cmd ={$output} \n");
+                }
+              }
+              elseif($VarName == "FossologyInstanceUUID") {
+                $exec_script_uuid_cmd = "python2 /usr/local/lib/fossology/fossdash-publish.py uuid";
+                $output = shell_exec($exec_script_uuid_cmd); 
+                file_put_contents('php://stderr', "output of uuid changed cmd ={$output} \n");
+              }
+              elseif($VarName == "FossDashScriptCronSchedule") {
+                $exec_script_cron_cmd = "python2 /usr/local/lib/fossology/fossdash-publish.py cron";
+                $output = shell_exec($exec_script_cron_cmd); 
+                file_put_contents('php://stderr', "output of cron job changed cmd ={$output} \n");
+              }
+
+
             if (! empty($UpdateMsg)) {
               $UpdateMsg .= ", ";
             }
