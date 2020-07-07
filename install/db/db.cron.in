@@ -10,5 +10,3 @@
 # running
 #0 3 * * * if [ -x /usr/sbin/pg_maintenance ]; then /usr/sbin/pg_maintenance --full --analyze >/dev/null; fi
 
-# Publish FossDash metrics
-*/1 * * * * root python2 {$LIBEXECDIR}/fossdash-publish.py >> /tmp/fossdash.log 2>&1

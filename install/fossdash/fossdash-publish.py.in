@@ -25,8 +25,15 @@ import psycopg2
 import datetime
 import random
 import string 
+import json
 import re
 import requests
+import subprocess
+import sys
+
+#base dir for fossdash reporting
+# TEMP_BASE_DIR = "{$REPODIR}/fossdash"
+TEMP_BASE_DIR = "/srv/fossology/repository/fossdash/"
 
 # Fossology DB configuration file
 DB_CONFIG_FILE = "{$SYSCONFDIR}/Db.conf"
@@ -55,6 +62,10 @@ QUERIES_NAME = [
 QUERIES = \{
 
     'uuid': "SELECT instance_uuid uuid FROM instance;",
+    'FossDashReportingAPIUrl': "select conf_value from sysconfig where variablename='FossDashReportingAPIUrl'",
+    'sysconfig_uuid': "select conf_value from sysconfig where variablename='FossologyInstanceUUID'",
+    'FossDashScriptCronSchedule': "select conf_value from sysconfig where variablename='FossDashScriptCronSchedule'",
+    'FossdashReportedCleaning': "select conf_value from sysconfig where variablename='FossdashReportedCleaning'",
     'number_of_users': "SELECT count(u.*) AS users FROM users u;",
     'number_of_groups': "SELECT count(g.*) AS groups FROM groups g;",
     'number_of_projects__theoretically': "SELECT count(up.*) as uploads from (select distinct upload_mode, upload_origin from upload) up;",
@@ -65,7 +76,7 @@ QUERIES = \{
     'number_of_projects_per_size': "select t.size, count(t.size) from (select CASE WHEN s.sx<2000 THEN 'small' WHEN s.sx>=2000 and s.sx<10000 THEN 'normal' ELSE 'big' END size from (select count(ut.ufile_name) sx from uploadtree ut group by upload_fk) s) t group by t.size;",
     "reportgen_count": "select count(*) from reportgen;",
     "pfile_count": "select count(*) from pfile;",
-    "avg_pfile_count": "select round(avg(pfile_size)) from pfile;",
+    "avg_pfile_count": "select COALESCE(round(avg(pfile_size)),0) from pfile;",
     "job_count": "select count(*) as jobs from job;"
     
 \}
@@ -171,9 +182,8 @@ def prepare_report(data, uuid, prefix=None):
 
     return reported_metrics
 
-def getAllMetricsData(connection):
+def getAllMetricsData(connection,uuid):
     
-    uuid = _query(connection, QUERIES['uuid'], single=True)[0]  # tuple
     raw_report = report(connection)
     # print raw_report
     query_results_metrics = prepare_report(raw_report,uuid)
@@ -184,11 +194,12 @@ def getAllMetricsData(connection):
 ## fetching fossdash reporting URL from database
 def getFossDashURL(connection) :
     
-    fossdash_url_query = "select conf_value from sysconfig where variablename='FossDashReportingAPIUrl'"
+    fossdash_url_query = QUERIES['FossDashReportingAPIUrl']
     fossdash_url_record = _query(connection,fossdash_url_query,True)
     fossdash_url = ""
-    if fossdash_url_record == None :
-        print("No record found with variable name FossDashReportingAPIUrl")
+    if fossdash_url_record is None or fossdash_url_record[0] is None:
+        print("FossDashReportingAPIUrl is not configured")
+        exit(0)
     else :
         fossdash_url = fossdash_url_record[0]
     
@@ -210,15 +221,94 @@ def pushMetricsToInflux(fossdash_url,file_path):
     else :
         print fossdash_response.text
 
+def UpdateCronJobSchedule(connection):
+
+    # get the latest cron schedule interval from database
+    cron_schedule_record = _query(connection, QUERIES['FossDashScriptCronSchedule'], single=True)
+    new_cron_job_interval = None
+    if cron_schedule_record is not None and cron_schedule_record[0] is not None:
+        new_cron_job_interval = cron_schedule_record[0]
+    else:
+        return
+    print "Updating cron job interval = ", new_cron_job_interval
+    cron_update_cmd = '(crontab -l | grep -v fossdash ; echo "'+new_cron_job_interval+' python2 {$LIBEXECDIR}/fossdash-publish.py >> ' + os.path.join(TEMP_BASE_DIR,"fossdash.log") + ' 2>&1") | crontab -'
+    # print cron_update_cmd
+    cron_update_cmd_output = subprocess.Popen(cron_update_cmd,shell=True)
+
+def cleanOldReportedFile(connection):
+
+    fossdash_clean_days_record = _query(connection, QUERIES['FossdashReportedCleaning'], single=True)
+    fossdash_clean_days = None
+    if fossdash_clean_days_record is not None and fossdash_clean_days_record[0] is not None:
+        fossdash_clean_days = fossdash_clean_days_record[0]
+    else:
+        return
+    
+    fossdash_cleanfile_path = os.path.join(TEMP_BASE_DIR,"fossdash_clean_file_list")
+    #dump all old reported files NAME into fossdash_clean_file_list 
+    find_cmd = "find " +TEMP_BASE_DIR+ ' -maxdepth 1 -iname "fossdash-publish*.reported" -ctime +' + fossdash_clean_days + ' > '+fossdash_cleanfile_path
+    # print find_cmd
+    find_cmd_output = subprocess.Popen(find_cmd,shell=True)
+
+    with open(fossdash_cleanfile_path,"r") as file_ptr:
+        for file_name in file_ptr:
+            print "cleaning old reported file : ", file_name
+            delete_cmd = "rm -rf "+file_name
+            delete_cmd_output = subprocess.Popen(delete_cmd,shell=True)
+              
+def updateNewUUIDInAllFiles(new_sysconfig_uuids):
+
+    print "updating all reported files with new instance UUID : ", new_sysconfig_uuids
+
+    #get all reported files
+    reported_files = [f for f in os.listdir(TEMP_BASE_DIR) if re.match(r'fossdash-publish.py.*(reported)$', f)]
+    for reported_file_name in reported_files:
+        file_path = os.path.join(TEMP_BASE_DIR,reported_file_name)
+        with open(file_path,"r") as file_ptr:
+            file_content = file_ptr.read()
+            new_instace_name = "instance="+new_sysconfig_uuids
+            # replaceAll old instanceID with new InstanceID
+            new_content = re.sub('instance=[a-zA-Z0-9_-]+',new_instace_name,file_content)
+            new_file_path = file_path[:-9] # remove .reported extension
+            with open(new_file_path,'w+') as new_file_ptr:
+                new_file_ptr.write(new_content)
+        os.remove(file_path)
+
+def getUUID(autogenerated_uuid,sysconfig_uuid):
+    if sysconfig_uuid is None:
+        return autogenerated_uuid
+    else:
+        return sysconfig_uuid
+
 if __name__ == "__main__":
+
     connection = None
+    print "\n"
     print datetime.datetime.now()
     try:
         connection = psycopg2.connect(config)
-        final_metrics = getAllMetricsData(connection)
+        fossdash_url = getFossDashURL(connection)
+
+        autogenerated_uuid = _query(connection, QUERIES['uuid'], single=True)[0]  # tuple
+        sysconfig_uuid_record = _query(connection, QUERIES['sysconfig_uuid'], single=True)
+        sysconfig_uuid = None
+        if sysconfig_uuid_record is not None and sysconfig_uuid_record[0] is not None:
+            sysconfig_uuid = sysconfig_uuid_record[0]
+
+        final_uuid = getUUID(autogenerated_uuid,sysconfig_uuid)
+        if len(sys.argv) > 1 :
+            for arg in sys.argv[1:]:
+                if arg == "cron":
+                    # update cronJon schedule
+                    UpdateCronJobSchedule(connection)
+                elif arg == "uuid":
+                    updateNewUUIDInAllFiles(final_uuid) 
+            exit(0)
+        
+        print "Fossology Instance UUID = ",final_uuid
+        final_metrics = getAllMetricsData(connection,final_uuid)
         print "All data metrics Generated"
-        dir_name = "/tmp/"
-        file_path = dir_name + os.path.basename(__file__) + "." + getRandomString(6)
+        file_path = os.path.join(TEMP_BASE_DIR, os.path.basename(__file__) + "." + getRandomString(6))
 
         # writting final resulted metrics into a file
         with open(file_path,"w+") as f:
@@ -226,15 +316,15 @@ if __name__ == "__main__":
                 f.write(row)
                 f.write("\n")
 
-        fossdash_url = getFossDashURL(connection)
         pushMetricsToInflux(fossdash_url,file_path)
         
         # gathering all unreported files and trying to publish them again
-        unreported_files = [f for f in os.listdir(dir_name) if re.match(r'fossdash-publish.py.*(?<!(reported))$', f)]
+        unreported_files = [f for f in os.listdir(TEMP_BASE_DIR) if re.match(r'fossdash-publish.py.*(?<!(reported))$', f)]
         for file_name in unreported_files :
-            pushMetricsToInflux(fossdash_url,os.path.join(dir_name,file_name))
+            pushMetricsToInflux(fossdash_url,os.path.join(TEMP_BASE_DIR,file_name))
 
-        print "\n"
+        # cleaning task for old reported file
+        cleanOldReportedFile(connection)
         
     except (Exception, psycopg2.DatabaseError) as error:
         print error
