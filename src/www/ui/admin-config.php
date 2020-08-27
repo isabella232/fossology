@@ -56,6 +56,7 @@ class foconfig extends FO_Plugin
 
     $Group = "";
     $InputStyle = "style='background-color:#dbf0f7'";
+    $OutBuf .= '<style> table.myTable > tbody > tr:first-child > td:first-child{width:20%} </style>';
     $OutBuf .= "<form method='POST'>";
     while ($row = pg_fetch_assoc($result)) {
       if ($Group != $row['group_name']) {
@@ -63,7 +64,7 @@ class foconfig extends FO_Plugin
           $OutBuf .= "</table><br>";
         }
         $Group = $row['group_name'];
-        $OutBuf .= "<table border=1>";
+        $OutBuf .= '<table border=1 class="myTable table table-striped" style="border-collapse: unset;">';
       }
 
       $OutBuf .= "<tr><td>$row[ui_label]</td><td>";
@@ -133,6 +134,7 @@ class foconfig extends FO_Plugin
     /* Compare new and old array
      * and update DB with new values */
     $UpdateMsg = "";
+    $ErrorMsg="";
     if (! empty($newarray)) {
       foreach ($newarray as $VarName => $VarValue) {
         if ($VarValue != $oldarray[$VarName]) {
@@ -192,19 +194,33 @@ class foconfig extends FO_Plugin
                 "Error: $ui_label $VarValue, is not a reachable URL.");
               echo "<script>alert('$warning_msg');</script>";
             }
+
+            if (! empty($ErrorMsg)) {
+              $ErrorMsg .= ", ";
+            }
+            $ErrorMsg .= $VarName;
+
           }
         }
       }
       if (! empty($UpdateMsg)) {
         $UpdateMsg .= _(" updated.");
       }
+      if (! empty($ErrorMsg)) {
+        $ErrorMsg .= _(" Error occurred.");
+      }
     }
 
     $OutBuf = '';
     if ($this->OutputType == 'HTML') {
+      $OutBuf .= "<div>";
       if ($UpdateMsg) {
-        $OutBuf .= "<span style='background-color:#ff8a8a'>$UpdateMsg</style><hr>";
+        $OutBuf .= "<span style='background-color:#99FF99'>$UpdateMsg</style>";
       }
+      if ($ErrorMsg) {
+        $OutBuf .= "<span style='background-color:#FF8181'>$ErrorMsg</style><hr>";
+      }
+      $OutBuf .= "</div> <hr>";
       $OutBuf .= $this->HTMLout();
     }
     $this->vars['content'] = $OutBuf;
