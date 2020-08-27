@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 #
+# Copyright (C) 2020 Orange
 # Copyright Darshan Kansagara <kansagara.darshan97@gmail.com>
 # SPDX-License-Identifier: GPL-2.0
 # Author: Nicolas Toussaint <nicolas1.toussaint@orange.com>
+# Author: Bartlomiej Drozdz <bartlomiej.drozdz@orange.com>
 # Author: Darshan Kansagara <kansagara.darshan97@gmail.com>
 #
 # This program is free software; you can redistribute it and/or
@@ -136,7 +138,6 @@ def getBuildVersionData(uuid) :
 
     return build_version_metrics
 
-
 # final report prepared as per influx DB data dump formate
 def prepare_report(data, uuid, prefix=None):
 
@@ -250,6 +251,7 @@ def pushMetricsToInflux(connection, fossdash_url,file_path, auth_type):
         fossdash_response = requests.post(fossdash_url, headers=auth_header, data=file_data)
     
     print("status code = " + str(fossdash_response.status_code))
+
     if fossdash_response.status_code == 200 or fossdash_response.status_code == 204 :
         try :
             os.rename(file_path, file_path+".reported") 
@@ -448,7 +450,6 @@ if __name__ == "__main__":
         auth_type = int(authType_record[0])
 
         pushMetricsToInflux(connection, fossdash_url, file_path, auth_type)
-        
         pushAllUnreportedFilesToInfluxDB(connection, fossdash_url, auth_type)
 
         # cleaning task for old reported file

@@ -199,7 +199,7 @@ if [[ $COMMON ]]; then
       "{$CACHEDIR}" \
       "$REPO" \
       "{$REPODIR}/fossdash"
-      
+
    chown root:$PROJECTGROUP "{$PROJECTSTATEDIR}" "{$PROJECTSTATEDIR}/agents" {$CACHEDIR}
    chmod 2775 "{$PROJECTSTATEDIR}" "{$PROJECTSTATEDIR}/agents" {$CACHEDIR} "{$REPODIR}/fossdash"
    
