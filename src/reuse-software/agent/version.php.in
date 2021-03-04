@@ -1,0 +1,4 @@
+<?php
+define("AGENT_DECIDER_NAME", "reuse-software");
+define("AGENT_DECIDER_VERSION", "{$VERSION}");
+define("AGENT_DECIDER_REV", "{$COMMIT_HASH}");
